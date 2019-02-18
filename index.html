@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+</style>
+<body>
+<input type="file">
+<script src="js/papaparse.min.js"></script>
+<script>
+	//var s = d3.scale.linear().range([4,2]);
+
+	var file;
+	//new File(file, "data.csv");
+	var data;
+
+	Papa.parse('data.csv', {
+		delimiter: ",",
+		header: true,
+		dynamicTyping: true,
+		skipEmptyLines: true,
+		download: true,
+		complete: function(results) {
+			console.log(results);
+			data = results.data;
+		}
+	});
+
+	//console.log(data[0]);
+</script>
