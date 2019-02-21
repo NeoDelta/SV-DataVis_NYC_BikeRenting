@@ -1,29 +1,245 @@
+
 <!DOCTYPE html>
 <meta charset="utf-8">
 <style>
 
 </style>
 <body>
-<input type="file">
-<script src="js/papaparse.min.js"></script>
-<script>
-	//var s = d3.scale.linear().range([4,2]);
 
-	var file;
-	//new File(file, "data.csv");
-	var data;
+	<script src="https://d3js.org/d3.v5.min.js"></script>
+	<script src="js/papaparse.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
 
-	Papa.parse('data.csv', {
-		delimiter: ",",
-		header: true,
-		dynamicTyping: true,
-		skipEmptyLines: true,
-		download: true,
-		complete: function(results) {
-			console.log(results);
-			data = results.data;
+	<div id="container" style="display: flex; width: 50%;">
+		<canvas id="genderChart"></canvas>
+	</div>
+
+	<div id="container2" style="width: 50%;">
+		<canvas id="ageChart"></canvas>
+	</div>
+
+	<script>
+		//var s = d3.scale.linear().range([4,2]);
+		var ctxGender = document.getElementById("genderChart");
+		var ctxAge = document.getElementById("ageChart");
+		var file;
+		//new File(file, "data.csv");
+		var data;
+		var gender = [0,0];
+		var age = [0,0,0,0,0];
+		var stations = [];
+		Papa.parse('data.csv', {
+			delimiter: ",",
+			header: true,
+			transformHeader: header => header.trim(),
+			dynamicTyping: true,
+			skipEmptyLines: true,
+			download: true,
+			complete: function(results) {
+				console.log(results);
+				data = results.data;
+				console.log(data[7]);
+				console.log(data[7]["birth year"]);
+
+				var knownStations = [];
+				var i;
+				for ( i = 0; i < data.length; i++) {
+					if (data[i].gender == 1) {
+						gender[0] += 1;
+					}
+					else if (data[i].gender == 2){
+						gender[1] += 1;
+					}
+
+					if (2018 - data[i]["birth year"] < 18){
+						age[0] += 1;
+					}
+					else if (2018 - data[i]["birth year"] >= 18 && 2018 - data[i]["birth year"] < 30){
+						age[1] += 1;
+					}
+					else if (2018 - data[i]["birth year"] >= 30 && 2018 - data[i]["birth year"] < 45){
+						age[2] += 1;
+					}
+					else if (2018 - data[i]["birth year"] >= 45 && 2018 - data[i]["birth year"] < 60){
+						age[3] += 1;
+					}
+					else {
+						age[4] += 1;
+					}
+
+					var auxInd = knownStations.indexOf(data[i]["start station id"]);
+					if (auxInd == -1) {
+						stations.push(new Station( data[i]["start station name"],
+							data[i]["start station id"],
+							knownStations.length,
+							[data[i]["start station latitude"], data[i]["start station longitude"]],
+							data[i].tripduration
+						));
+
+						knownStations.push(data[i]["start station id"]);
+					}
+					else {
+						stations[auxInd].avgTrip += Number(data[i].tripduration);
+						stations[auxInd].numTrips += 1;
+					}
+				}
+
+				
+
+				var clustData = stations.map(function(station) { return [station.avgTrip/station.numTrips, station.numTrips];})
+
+				console.log(clustData);
+
+				var res = kmeans(clustData, 5, 1000);
+
+				console.log(res);
+
+				var myChart = new Chart(ctxGender, {
+					type: 'doughnut',
+					data: {
+						labels: ["Woman", "Man"],
+						datasets: [{
+							label: '# of people',
+							data: [gender[1], gender[0]],
+							backgroundColor: [
+				                'rgba(255, 99, 132, 0.2)',
+				                'rgba(54, 162, 235, 0.2)'
+				            ],
+				            borderColor: [
+				                'rgba(255,99,132,1)',
+				                'rgba(54, 162, 235, 1)'
+				            ],
+				            borderWidth: 1
+						}]
+					},
+					options: {
+				        
+				    }
+				});
+
+				var myChart2 = new Chart(ctxAge, {
+					type: 'bar',
+					data: {
+						labels: ["-18", "18-30", "30-45", "45-60", "60+"],
+						datasets: [{
+							label: '# of people',
+							data: age,
+							backgroundColor: [
+				                'rgba(255, 99, 132, 0.2)',
+				                'rgba(255, 99, 132, 0.2)',
+				                'rgba(255, 99, 132, 0.2)',
+				                'rgba(255, 99, 132, 0.2)',
+				                'rgba(255, 99, 132, 0.2)'
+				            ],
+				            borderColor: [
+				                'rgba(255,99,132,1)',
+				                'rgba(255,99,132,1)',
+				                'rgba(255,99,132,1)',
+				                'rgba(255,99,132,1)',
+				                'rgba(255,99,132,1)'
+				            ],
+				            borderWidth: 1
+						}]
+					},
+					options: {
+				        
+				    }
+				});
+
+			}
+		});
+
+		function Station(name, id, ind, coordinates, initTrip) {
+			var self = this;
+			this.name = name;
+			this.id = id;
+			this.ind = ind;
+			this.coordinates = coordinates;
+			this.avgTrip = initTrip;
+			this.numTrips = 1;
 		}
-	});
 
-	//console.log(data[0]);
-</script>
+		function avg(points) {
+
+			var sumx = 0;
+			var sumy = 0;
+
+			for(var i = 0; i < points.length; i++) {
+				sumx += points[i].position[0];
+				sumy += points[i].position[1];
+			}
+
+			return [sumx/points.length, sumy/points.length];
+		}
+
+		function minIndex(array) {
+
+			var min = 50000;
+			var ind = 0;
+
+			for( var i = 0; i < array.length; i++) {
+				if(array[i] < min) {
+					min = array[i];
+					ind = i;
+				}
+			}
+
+			return ind;
+		}
+
+		function Point(position) {
+			var self = this;
+			this.position = position;
+			this.centroid = null;
+			this.updateCentroid = function(centroids) {
+				var dists = centroids.map(function(centroid) {
+					var x = Math.pow(self.position[0] - centroid.position[0], 2);
+					var y = Math.pow(self.position[1] - centroid.position[1], 2);
+					return Math.sqrt(x+y);
+				});
+				self.centroid = minIndex(dists);
+			}
+		}
+
+		function Centroid(position, index) {
+			var self = this;
+			this.position = position;
+			this.ind = index;
+			this.updatePosition = function(points) {
+				var pointsToSelf = points.filter(function(point) { 
+					return point.centroid == self.ind;
+				});
+				//console.log("pts: ");
+				//console.log(pointsToSelf);
+				if(pointsToSelf.length > 0) self.position = avg(pointsToSelf);
+			}
+		}
+
+		function kmeans(data, k, n_iter) {
+
+			//Initialize data
+			var points = data.map(function(position) {
+				return new Point(position);
+			})
+	
+			//Initialize centroids
+			var centroids = [];
+			for(var i = 0; i < k; i++) {
+				//centroids.push(new Centroid([Math.random().toFixed(2), Math.random().toFixed(2)], i));
+				centroids.push(new Centroid(data[Math.floor(Math.random()*(data.length-1))].slice(), i));
+			}
+
+			//console.log(avg(points));
+			//Converge
+			for(var i = 0; i < n_iter; i++) {
+				points.forEach(function(point) { point.updateCentroid(centroids); })
+				centroids.forEach(function(centroid) { centroid.updatePosition(points); })
+			}
+
+			return [points.map( function(point) { return point.centroid; }), centroids];
+		}
+
+		
+
+	</script>
+</body>
